@@ -1,7 +1,7 @@
 import axios from 'axios';
-import { 
+import {
   ProcessedLiveFeedMatch,
-  ProcessedBet, 
+  ProcessedBet,
   ReadableOdds,
   LiveFeedConfig,
   LiveFeedSport,
@@ -29,7 +29,7 @@ export class LiveFeedService {
       leagues: new Map(),
       lastDeltaCacheNumber: null
     };
-    
+
     this.dataStorageService = new DataStorageService();
     this.initializeDataStorage();
   }
@@ -104,10 +104,10 @@ export class LiveFeedService {
     if (this.cacheUpdateTimer) {
       return;
     }
-    
+
     // Set up interval for cache updates based on collection interval
     let cacheUpdateInterval = 5000; // Default 5 seconds
-    
+
     if (this.config.collectionInterval === 1) {
       cacheUpdateInterval = 1000; // 1 second for immediate collection
     } else if (this.config.collectionInterval <= 15) {
@@ -117,7 +117,7 @@ export class LiveFeedService {
     } else {
       cacheUpdateInterval = 10000; // 10 seconds for 60s+ collection
     }
-    
+
     this.cacheUpdateTimer = setInterval(() => {
       this.updateCacheChanges();
     }, cacheUpdateInterval);
@@ -127,10 +127,10 @@ export class LiveFeedService {
     try {
       const sportName = this.config.selectedSport === 'B' ? 'basketball' : this.config.selectedSport === 'T' ? 'tennis' : 'football';
       console.log(`Collecting AdmiralBet ${sportName} live feed data...`);
-      
+
       // Step 1: Get live tree data
       const liveTreeData = await this.fetchLiveTreeData();
-      
+
       if (liveTreeData.length === 0) {
         console.log('No live events found');
         return;
@@ -138,7 +138,7 @@ export class LiveFeedService {
 
       // Step 2: Extract event IDs for the selected sport
       const eventIds = this.extractEventIds(liveTreeData);
-      
+
       if (eventIds.length === 0) {
         console.log(`No live events found for sport ${this.config.selectedSport}`);
         return;
@@ -266,7 +266,7 @@ export class LiveFeedService {
     try {
       // Process bets from event data
       const readableOdds: ReadableOdds = {};
-      
+
       for (const bet of event.bets) {
         this.processBetOutcomes(bet, readableOdds);
       }
@@ -300,7 +300,7 @@ export class LiveFeedService {
 
       // Store the match
       this.config.matches.set(event.id, processedMatch);
-      
+
       console.log(`Processed live match: ${homeTeam} vs ${awayTeam} (${event.competitionName}) - Score: ${processedMatch.liveScore}`);
 
     } catch (error) {
@@ -357,7 +357,7 @@ export class LiveFeedService {
               if (!readableOdds.fullTimeUnderTotal) {
                 readableOdds.fullTimeUnderTotal = {};
               }
-              readableOdds.fullTimeUnderTotal[specialValue] = {
+              readableOdds.fullTimeUnderTotal[`FT_${specialValue}`] = {
                 oddValue: outcome.odd,
                 betPickCode: outcome.betTypeOutcomeId
               };
@@ -365,11 +365,43 @@ export class LiveFeedService {
               if (!readableOdds.fullTimeOverTotal) {
                 readableOdds.fullTimeOverTotal = {};
               }
-              readableOdds.fullTimeOverTotal[specialValue] = {
+              readableOdds.fullTimeOverTotal[`FT_${specialValue}`] = {
                 oddValue: outcome.odd,
                 betPickCode: outcome.betTypeOutcomeId
               };
             }
+          }
+        } else if (bet.betTypeName === '1.pol - Ukupno') { // First half total goals
+          if (specialValue) {
+            if (outcomeName?.toLowerCase().includes('manje')) {
+              if (!readableOdds.firstHalfUnderTotal) {
+                readableOdds.firstHalfUnderTotal = {};
+              }
+              readableOdds.firstHalfUnderTotal[`1H_${specialValue}`] = {
+                oddValue: outcome.odd,
+                betPickCode: outcome.betTypeOutcomeId
+              };
+            } else if (outcomeName?.toLowerCase().includes('vise')) {
+              if (!readableOdds.firstHalfOverTotal) {
+                readableOdds.firstHalfOverTotal = {};
+              }
+              readableOdds.firstHalfOverTotal[`1H_${specialValue}`] = {
+                oddValue: outcome.odd,
+                betPickCode: outcome.betTypeOutcomeId
+              };
+            }
+          }
+        } else if (bet.betTypeName === 'Oba tima daju gol') { // Both teams to score
+          if (outcomeName === 'GG' || outcomeName?.toLowerCase().includes('da')) {
+            readableOdds.bothTeamsToScore = {
+              oddValue: outcome.odd,
+              betPickCode: outcome.betTypeOutcomeId
+            };
+          } else if (outcomeName === 'NG' || outcomeName?.toLowerCase().includes('ne')) {
+            readableOdds.oneTeamNotToScore = {
+              oddValue: outcome.odd,
+              betPickCode: outcome.betTypeOutcomeId
+            };
           }
         }
       } else if (this.config.selectedSport === 'B') {
@@ -500,20 +532,20 @@ export class LiveFeedService {
         const sportId = event.id[1]; // Sport ID is at index 1
         const regionId = event.id[2]; // Region ID is at index 2
         const competitionId = event.id[3]; // Competition ID is at index 3
-        
+
         // Only process if it's for the selected sport
         const sportMapping: { [key: number]: string } = { 1: 'S', 2: 'B', 3: 'T' };
         if (sportMapping[sportId] !== this.config.selectedSport) {
-        continue;
-      }
+          continue;
+        }
 
         // Check if this is a new live event we don't have yet
         if (!this.config.matches.has(eventId)) {
           console.log(`New live event detected: ${eventId}, fetching detailed odds...`);
-          
+
           // Fetch detailed odds for this new event
           const detailedOdds = await this.fetchDetailedOddsForMatch(sportId, regionId, competitionId, eventId);
-          
+
           // Create a complete LiveFeedEvent object
           const liveFeedEvent: LiveFeedEvent = {
             id: eventId,
@@ -568,8 +600,8 @@ export class LiveFeedService {
         // Validate outcome structure
         if (!outcome || !outcome.id || outcome.id.length < 5 || !outcome.n || outcome.n.length < 3 || !outcome.t) {
           console.warn('Invalid bet outcome structure:', outcome);
-        continue;
-      }
+          continue;
+        }
 
         const eventId = outcome.id[4]; // Event ID is at index 4
         const sportId = outcome.id[1]; // Sport ID is at index 1
@@ -583,9 +615,9 @@ export class LiveFeedService {
         // Only process if it's for the selected sport
         const sportMapping: { [key: number]: string } = { 1: 'S', 2: 'B', 3: 'T' };
         if (sportMapping[sportId] !== this.config.selectedSport) {
-        continue;
-      }
-      
+          continue;
+        }
+
         // Find the match and update the odds
         const match = this.config.matches.get(eventId);
         if (match) {
@@ -707,7 +739,7 @@ export class LiveFeedService {
             if (!odds.fullTimeUnderTotal) {
               odds.fullTimeUnderTotal = {};
             }
-            odds.fullTimeUnderTotal[specialValue] = {
+            odds.fullTimeUnderTotal[`FT_${specialValue}`] = {
               oddValue: newValue,
               betPickCode: betTypeOutcomeId
             };
@@ -715,11 +747,43 @@ export class LiveFeedService {
             if (!odds.fullTimeOverTotal) {
               odds.fullTimeOverTotal = {};
             }
-            odds.fullTimeOverTotal[specialValue] = {
+            odds.fullTimeOverTotal[`FT_${specialValue}`] = {
               oddValue: newValue,
               betPickCode: betTypeOutcomeId
             };
           }
+        }
+      } else if (betTypeName === '1.p - Ukupno') {
+        if (specialValue) {
+          if (outcomeName?.toLowerCase().includes('manje')) {
+            if (!odds.firstHalfUnderTotal) {
+              odds.firstHalfUnderTotal = {};
+            }
+            odds.firstHalfUnderTotal[`1H_${specialValue}`] = {
+              oddValue: newValue,
+              betPickCode: betTypeOutcomeId
+            };
+          } else if (outcomeName?.toLowerCase().includes('vise')) {
+            if (!odds.firstHalfOverTotal) {
+              odds.firstHalfOverTotal = {};
+            }
+            odds.firstHalfOverTotal[`1H_${specialValue}`] = {
+              oddValue: newValue,
+              betPickCode: betTypeOutcomeId
+            };
+          }
+        }
+      } else if (betTypeName === 'Oba tima daju gol') { // Both teams to score
+        if (outcomeName === 'GG' || outcomeName?.toLowerCase().includes('da')) {
+          odds.bothTeamsToScore = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName === 'NG' || outcomeName?.toLowerCase().includes('ne')) {
+          odds.oneTeamNotToScore = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
         }
       }
     }
@@ -728,7 +792,7 @@ export class LiveFeedService {
   private async fetchDetailedOddsForMatch(sportId: number, regionId: number, competitionId: number, matchId: number): Promise<any> {
     try {
       const url = `https://srboffer.admiralbet.rs/api/offer/betsAndGroups/${sportId}/${regionId}/${competitionId}/${matchId}`;
-      
+
       const response = await axios.get(url, {
         timeout: 30000,
         headers: {
@@ -757,7 +821,7 @@ export class LiveFeedService {
 
     try {
       const currentMatches = Array.from(this.config.matches.values());
-      
+
       const metadata = {
         lastUpdated: new Date().toISOString(),
         collectionInterval: this.config.collectionInterval,
@@ -776,7 +840,7 @@ export class LiveFeedService {
     const basketballMatches = Array.from(this.config.matches.values()).filter(match => match.sport === 'B');
     const tennisMatches = Array.from(this.config.matches.values()).filter(match => match.sport === 'T');
     const footballMatches = Array.from(this.config.matches.values()).filter(match => match.sport === 'S');
-    
+
     return {
       isRunning: this.config.isRunning,
       collectionInterval: this.config.collectionInterval,
@@ -789,22 +853,22 @@ export class LiveFeedService {
       redisConnected: this.dataStorageService.isRedisConnected(),
       basketballMatches: {
         total: basketballMatches.length,
-        withFTOTOdds: basketballMatches.filter(match => 
-          match.bets.odds.basketballFTOT1 || 
+        withFTOTOdds: basketballMatches.filter(match =>
+          match.bets.odds.basketballFTOT1 ||
           match.bets.odds.basketballFTOT2
         ).length
       },
       tennisMatches: {
         total: tennisMatches.length,
-        withDetailedOdds: tennisMatches.filter(match => 
-          match.bets.odds.tennisHomeWins || 
+        withDetailedOdds: tennisMatches.filter(match =>
+          match.bets.odds.tennisHomeWins ||
           match.bets.odds.tennisAwayWins
         ).length
       },
       footballMatches: {
         total: footballMatches.length,
-        withDetailedOdds: footballMatches.filter(match => 
-          match.bets.odds.fullTimeResultHomeWin || 
+        withDetailedOdds: footballMatches.filter(match =>
+          match.bets.odds.fullTimeResultHomeWin ||
           match.bets.odds.fullTimeResultDraw ||
           match.bets.odds.fullTimeResultAwayWin ||
           match.bets.odds.firstHalfResultHomeWin ||
