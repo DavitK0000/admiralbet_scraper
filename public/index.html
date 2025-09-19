@@ -267,7 +267,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <h1>🔥 Betting Data Processor</h1>
-                    <p>Real-time live feed and pre-games processing from MaxBet</p>
+                    <p>Real-time live feed and pre-games processing from AdmiralBet</p>
                 </div>
                 <div>
                     <button id="logoutBtn" class="btn" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); padding: 8px 16px; font-size: 0.9rem;">
@@ -641,50 +641,109 @@
                             <div style="margin-top: 10px;">
                                 <strong>Betting Information:</strong>
                                 <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.9rem;">
-                                    <div><strong>Odds Available:</strong> ${Object.keys(match.bets.odds).length} options</div>
+                                    <div><strong>Odds Available:</strong> ${(() => {
+                                        let totalOdds = 0;
+                                        for (const [key, value] of Object.entries(match.bets.odds)) {
+                                            if (key === 'firstHalfOverTotal' || key === 'firstHalfUnderTotal' || 
+                                                key === 'fullTimeOverTotal' || key === 'fullTimeUnderTotal') {
+                                                if (typeof value === 'object' && value !== null) {
+                                                    totalOdds += Object.keys(value).length;
+                                                }
+                                            } else {
+                                                totalOdds += 1;
+                                            }
+                                        }
+                                        return totalOdds;
+                                    })()} options</div>
                                     <div style="margin-top: 8px;">
                                         <strong>Available Odds:</strong>
                                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 5px; margin-top: 5px;">
-                                            ${Object.entries(match.bets.odds).map(([key, value]) => {
-                                                let displayText = value.oddValue;
-                                                let labelText = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                                            ${(() => {
+                                                const expandedOdds = [];
                                                 
-                                                // Handle special values for first half totals - check if key contains special value
-                                                if (key.startsWith('firstHalfOver') && value.specialValue) {
-                                                    const totalMatch = value.specialValue.match(/total=(\d+(?:\.\d+)?)/);
-                                                    if (totalMatch) {
-                                                        labelText = `First Half Over ${totalMatch[1]}`;
+                                                // Process each odds entry and expand special value objects
+                                                for (const [key, value] of Object.entries(match.bets.odds)) {
+                                                    if (key === 'firstHalfOverTotal' && typeof value === 'object' && value !== null) {
+                                                        // Create separate entries for each first half over total special value
+                                                        for (const [specialValue, odds] of Object.entries(value)) {
+                                                            expandedOdds.push({
+                                                                key: `firstHalfOver${specialValue}`,
+                                                                value: odds,
+                                                                labelText: `First Half Over ${specialValue}`,
+                                                                displayText: odds.oddValue
+                                                            });
+                                                        }
+                                                    } else if (key === 'firstHalfUnderTotal' && typeof value === 'object' && value !== null) {
+                                                        // Create separate entries for each first half under total special value
+                                                        for (const [specialValue, odds] of Object.entries(value)) {
+                                                            expandedOdds.push({
+                                                                key: `firstHalfUnder${specialValue}`,
+                                                                value: odds,
+                                                                labelText: `First Half Under ${specialValue}`,
+                                                                displayText: odds.oddValue
+                                                            });
+                                                        }
+                                                    } else if (key === 'fullTimeOverTotal' && typeof value === 'object' && value !== null) {
+                                                        // Create separate entries for each full-time over total special value
+                                                        for (const [specialValue, odds] of Object.entries(value)) {
+                                                            expandedOdds.push({
+                                                                key: `fullTimeOver${specialValue}`,
+                                                                value: odds,
+                                                                labelText: `Full Time Over ${specialValue}`,
+                                                                displayText: odds.oddValue
+                                                            });
+                                                        }
+                                                    } else if (key === 'fullTimeUnderTotal' && typeof value === 'object' && value !== null) {
+                                                        // Create separate entries for each full-time under total special value
+                                                        for (const [specialValue, odds] of Object.entries(value)) {
+                                                            expandedOdds.push({
+                                                                key: `fullTimeUnder${specialValue}`,
+                                                                value: odds,
+                                                                labelText: `Full Time Under ${specialValue}`,
+                                                                displayText: odds.oddValue
+                                                            });
+                                                        }
+                                                    } else {
+                                                        // Regular odds entry
+                                                        expandedOdds.push({
+                                                            key: key,
+                                                            value: value,
+                                                            labelText: key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()),
+                                                            displayText: value.oddValue
+                                                        });
                                                     }
-                                                } else if (key.startsWith('firstHalfUnder') && value.specialValue) {
-                                                    const totalMatch = value.specialValue.match(/total=(\d+(?:\.\d+)?)/);
-                                                    if (totalMatch) {
-                                                        labelText = `First Half Under ${totalMatch[1]}`;
-                                                    }
-                                                } else if (key === 'basketballFTOT1') {
-                                                    labelText = 'Basketball FTOT1';
-                                                } else if (key === 'basketballFTOT2') {
-                                                    labelText = 'Basketball FTOT2';
-                                                } else if (key === 'tennisHomeWins') {
-                                                    labelText = 'Tennis Home Wins';
-                                                } else if (key === 'tennisAwayWins') {
-                                                    labelText = 'Tennis Away Wins';
-                                                } else if (key === 'tennisHomeWinsFirstSet') {
-                                                    labelText = 'Tennis Home Wins First Set';
-                                                } else if (key === 'tennisAwayWinsFirstSet') {
-                                                    labelText = 'Tennis Away Wins First Set';
-                                                } else if (key === 'tennisHomeWinsSecondSet') {
-                                                    labelText = 'Tennis Home Wins Second Set';
-                                                } else if (key === 'tennisAwayWinsSecondSet') {
-                                                    labelText = 'Tennis Away Wins Second Set';
+                                                }
+                                                
+                                                return expandedOdds.map(entry => {
+                                                    let finalLabelText = entry.labelText;
+                                                    
+                                                    // Apply specific label formatting for certain odds types
+                                                    if (entry.key === 'basketballFTOT1') {
+                                                        entry.labelText = 'Basketball FTOT1';
+                                                    } else if (entry.key === 'basketballFTOT2') {
+                                                        entry.labelText = 'Basketball FTOT2';
+                                                    } else if (entry.key === 'tennisHomeWins') {
+                                                        entry.labelText = 'Tennis Home Wins';
+                                                    } else if (entry.key === 'tennisAwayWins') {
+                                                        entry.labelText = 'Tennis Away Wins';
+                                                    } else if (entry.key === 'tennisHomeWinsFirstSet') {
+                                                        entry.labelText = 'Tennis Home Wins First Set';
+                                                    } else if (entry.key === 'tennisAwayWinsFirstSet') {
+                                                        entry.labelText = 'Tennis Away Wins First Set';
+                                                    } else if (entry.key === 'tennisHomeWinsSecondSet') {
+                                                        entry.labelText = 'Tennis Home Wins Second Set';
+                                                    } else if (entry.key === 'tennisAwayWinsSecondSet') {
+                                                        entry.labelText = 'Tennis Away Wins Second Set';
                                                 }
                                                 
                                                 return `
                                                 <div style="background: white; padding: 5px; border-radius: 3px; font-size: 0.8rem;">
-                                                    <div><strong>${labelText}:</strong></div>
-                                                    <div>${displayText}</div>
+                                                        <div><strong>${entry.labelText}:</strong></div>
+                                                        <div>${entry.displayText}</div>
                                                 </div>
                                             `;
-                                            }).join('')}
+                                            }).join('');
+                                        })()}
                                         </div>
                                     </div>
                                 </div>
@@ -859,26 +918,61 @@
                             <div style="margin-top: 10px;">
                                 <strong>Betting Information:</strong>
                                 <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.9rem;">
-                                    <div><strong>Odds Available:</strong> ${Object.keys(match.bets.odds).length} options</div>
+                                    <div><strong>Odds Available:</strong> ${(() => {
+                                        let totalOdds = 0;
+                                        for (const [key, value] of Object.entries(match.bets.odds)) {
+                                            if (key === 'firstHalfOverTotal' || key === 'firstHalfUnderTotal' || 
+                                                key === 'fullTimeOverTotal' || key === 'fullTimeUnderTotal') {
+                                                if (typeof value === 'object' && value !== null) {
+                                                    totalOdds += Object.keys(value).length;
+                                                }
+                                            } else {
+                                                totalOdds += 1;
+                                            }
+                                        }
+                                        return totalOdds;
+                                    })()} options</div>
                                     <div style="margin-top: 8px;">
                                         <strong>Available Odds:</strong>
                                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 5px; margin-top: 5px;">
                                             ${Object.entries(match.bets.odds).map(([key, value]) => {
-                                                let displayText = value.oddValue;
+                                                let displayText = '';
                                                 let labelText = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                                                 
                                                 // Handle special values for first half totals
-                                                if (key.startsWith('firstHalfOver') && value.specialValue) {
-                                                    const totalMatch = value.specialValue.match(/total=(\d+(?:\.\d+)?)/);
-                                                    if (totalMatch) {
-                                                        labelText = `First Half Over ${totalMatch[1]}`;
-                                                    }
-                                                } else if (key.startsWith('firstHalfUnder') && value.specialValue) {
-                                                    const totalMatch = value.specialValue.match(/total=(\d+(?:\.\d+)?)/);
-                                                    if (totalMatch) {
-                                                        labelText = `First Half Under ${totalMatch[1]}`;
-                                                    }
-                                                } else if (key === 'basketballFTOT1') {
+                                                if (key === 'firstHalfOverTotal' && typeof value === 'object' && value !== null) {
+                                                    // Display all over total odds with their special values
+                                                    const overOdds = Object.entries(value).map(([specialValue, odds]) => 
+                                                        `First Half Over ${specialValue}: ${odds.oddValue}`
+                                                    ).join(', ');
+                                                    labelText = overOdds;
+                                                    displayText = 'Multiple odds';
+                                                } else if (key === 'firstHalfUnderTotal' && typeof value === 'object' && value !== null) {
+                                                    // Display all under total odds with their special values
+                                                    const underOdds = Object.entries(value).map(([specialValue, odds]) => 
+                                                        `First Half Under ${specialValue}: ${odds.oddValue}`
+                                                    ).join(', ');
+                                                    labelText = underOdds;
+                                                    displayText = 'Multiple odds';
+                                                } else if (key === 'fullTimeOverTotal' && typeof value === 'object' && value !== null) {
+                                                    // Display all full-time over total odds with their special values
+                                                    const overOdds = Object.entries(value).map(([specialValue, odds]) => 
+                                                        `Full Time Over ${specialValue}: ${odds.oddValue}`
+                                                    ).join(', ');
+                                                    labelText = overOdds;
+                                                    displayText = 'Multiple odds';
+                                                } else if (key === 'fullTimeUnderTotal' && typeof value === 'object' && value !== null) {
+                                                    // Display all full-time under total odds with their special values
+                                                    const underOdds = Object.entries(value).map(([specialValue, odds]) => 
+                                                        `Full Time Under ${specialValue}: ${odds.oddValue}`
+                                                    ).join(', ');
+                                                    labelText = underOdds;
+                                                    displayText = 'Multiple odds';
+                                                } else {
+                                                    displayText = value.oddValue;
+                                                }
+                                                
+                                                if (key === 'basketballFTOT1') {
                                                     labelText = 'Basketball FTOT1';
                                                 } else if (key === 'basketballFTOT2') {
                                                     labelText = 'Basketball FTOT2';
@@ -898,8 +992,8 @@
                                                 
                                                 return `
                                                 <div style="background: white; padding: 5px; border-radius: 3px; font-size: 0.8rem;">
-                                                    <div><strong>${labelText}:</strong></div>
-                                                    <div>${displayText}</div>
+                                                        <div><strong>${labelText}:</strong></div>
+                                                        <div>${displayText}</div>
                                                 </div>
                                             `;
                                             }).join('')}

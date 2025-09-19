@@ -115,20 +115,24 @@ export class LiveFeedService {
           // Parse special value for first half under total
           const underTotalMatch = specialValue.match(/total=(\d+(?:\.\d+)?)/);
           const underTotalValue = underTotalMatch ? underTotalMatch[1] : specialValue;
-          readableOdds.firstHalfUnderTotal = { 
+          if (!readableOdds.firstHalfUnderTotal) {
+            readableOdds.firstHalfUnderTotal = {};
+          }
+          readableOdds.firstHalfUnderTotal[underTotalValue] = { 
             oddValue: value.ov, 
-            betPickCode: value.bpc, 
-            specialValue: `total=${underTotalValue}` 
+            betPickCode: value.bpc
           };
           break;
         case 229:
           // Parse special value for first half over total
           const overTotalMatch = specialValue.match(/total=(\d+(?:\.\d+)?)/);
           const overTotalValue = overTotalMatch ? overTotalMatch[1] : specialValue;
-          readableOdds.firstHalfOverTotal = { 
+          if (!readableOdds.firstHalfOverTotal) {
+            readableOdds.firstHalfOverTotal = {};
+          }
+          readableOdds.firstHalfOverTotal[overTotalValue] = { 
             oddValue: value.ov, 
-            betPickCode: value.bpc, 
-            specialValue: `total=${overTotalValue}` 
+            betPickCode: value.bpc
           };
           break;
         case 272:
@@ -669,7 +673,7 @@ export class LiveFeedService {
         
         // If this odd has a special value, create a descriptive key
         if (value.specialValue) {
-          const specialValueMatch = value.specialValue.match(/total=(\d+(?:\.\d+)?)/);
+          const specialValueMatch = value.specialValue.toString().match(/total=(\d+(?:\.\d+)?)/);
           if (specialValueMatch) {
             const totalValue = specialValueMatch[1];
             

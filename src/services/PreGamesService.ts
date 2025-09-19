@@ -499,17 +499,23 @@ export class PreGamesService {
         if (bet.betTypeName === '1.pol - Ukupno golova') {
           for (const outcome of bet.betOutcomes) {
             const name = outcome.name?.toLowerCase() || '';
+            const specialValue = outcome.sbv?.toString() || '0.5';
+            
             if (name.includes('manje')) {
-              readableOdds.firstHalfUnderTotal = {
+              if (!readableOdds.firstHalfUnderTotal) {
+                readableOdds.firstHalfUnderTotal = {};
+              }
+              readableOdds.firstHalfUnderTotal[specialValue] = {
                 oddValue: outcome.odd,
-                betPickCode: outcome.betTypeOutcomeId,
-                specialValue: outcome.specialValue?.toString() || '0.5'
+                betPickCode: outcome.betTypeOutcomeId
               };
             } else if (name.includes('vise')) {
-              readableOdds.firstHalfOverTotal = {
+              if (!readableOdds.firstHalfOverTotal) {
+                readableOdds.firstHalfOverTotal = {};
+              }
+              readableOdds.firstHalfOverTotal[specialValue] = {
                 oddValue: outcome.odd,
-                betPickCode: outcome.betTypeOutcomeId,
-                specialValue: outcome.specialValue?.toString() || '0.5'
+                betPickCode: outcome.betTypeOutcomeId
               };
             }
           }
@@ -519,17 +525,23 @@ export class PreGamesService {
         if (bet.betTypeName === 'Ukupno golova') {
           for (const outcome of bet.betOutcomes) {
             const name = outcome.name?.toLowerCase() || '';
+            const specialValue = outcome.sbv?.toString() || '2.5';
+            
             if (name.includes('manje')) {
-              readableOdds.underTotal = {
+              if (!readableOdds.fullTimeUnderTotal) {
+                readableOdds.fullTimeUnderTotal = {};
+              }
+              readableOdds.fullTimeUnderTotal[specialValue] = {
                 oddValue: outcome.odd,
-                betPickCode: outcome.betTypeOutcomeId,
-                specialValue: outcome.specialValue?.toString() || '2.5'
+                betPickCode: outcome.betTypeOutcomeId
               };
             } else if (name.includes('vise')) {
-              readableOdds.overTotal = {
+              if (!readableOdds.fullTimeOverTotal) {
+                readableOdds.fullTimeOverTotal = {};
+              }
+              readableOdds.fullTimeOverTotal[specialValue] = {
                 oddValue: outcome.odd,
-                betPickCode: outcome.betTypeOutcomeId,
-                specialValue: outcome.specialValue?.toString() || '2.5'
+                betPickCode: outcome.betTypeOutcomeId
               };
             }
           }

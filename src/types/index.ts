@@ -188,15 +188,17 @@ export interface ProcessedBet {
 }
 
 export interface ReadableOdds {
-  [key: string]: { oddValue: number; betPickCode: number; specialValue?: string } | undefined;
+  [key: string]: { oddValue: number; betPickCode: number; specialValue?: string } | { [specialValue: string]: { oddValue: number; betPickCode: number } } | undefined;
   fullTimeResultHomeWin?: { oddValue: number; betPickCode: number };
   fullTimeResultDraw?: { oddValue: number; betPickCode: number };
   fullTimeResultAwayWin?: { oddValue: number; betPickCode: number };
   firstHalfResultHomeWin?: { oddValue: number; betPickCode: number };
   firstHalfResultDraw?: { oddValue: number; betPickCode: number };
   firstHalfResultAwayWin?: { oddValue: number; betPickCode: number };
-  firstHalfUnderTotal?: { oddValue: number; betPickCode: number; specialValue: string };
-  firstHalfOverTotal?: { oddValue: number; betPickCode: number; specialValue: string };
+  firstHalfUnderTotal?: { [specialValue: string]: { oddValue: number; betPickCode: number } };
+  firstHalfOverTotal?: { [specialValue: string]: { oddValue: number; betPickCode: number } };
+  fullTimeUnderTotal?: { [specialValue: string]: { oddValue: number; betPickCode: number } };
+  fullTimeOverTotal?: { [specialValue: string]: { oddValue: number; betPickCode: number } };
   bothTeamsToScore?: { oddValue: number; betPickCode: number };
   oneTeamNotToScore?: { oddValue: number; betPickCode: number };
   zeroToTwoGoals?: { oddValue: number; betPickCode: number };
