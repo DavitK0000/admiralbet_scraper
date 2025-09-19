@@ -582,10 +582,45 @@ export class LiveFeedService {
 
           // Process the live event
           await this.processLiveEvent(liveFeedEvent);
+        } else {
+          // Event already exists, update its properties
+          console.log(`Updating existing live event: ${eventId}`);
+          const existingMatch = this.config.matches.get(eventId);
+          if (existingMatch) {
+            // Update basic event properties
+            existingMatch.status = event.n[0];
+            existingMatch.blocked = !(event.b[1] === 1); // isPlayable
+            existingMatch.favourite = event.b[3] === 1; // isTopOffer
+            
+            // Update team names if they changed
+            const newEventName = event.t[3];
+            if (newEventName && newEventName !== existingMatch.home + ' - ' + existingMatch.away) {
+              const teamNames = newEventName.split(' - ');
+              existingMatch.home = teamNames[0]?.trim() || existingMatch.home;
+              existingMatch.away = teamNames[1]?.trim() || existingMatch.away;
+            }
+            
+            // Update league name if it changed
+            const newCompetitionName = event.t[2];
+            if (newCompetitionName && newCompetitionName !== existingMatch.league) {
+              existingMatch.league = newCompetitionName;
+            }
+            
+            // Update kickoff time if it changed
+            const newDateTime = event.t[1];
+            if (newDateTime) {
+              const newKickOffTime = new Date(newDateTime).getTime();
+              if (newKickOffTime !== existingMatch.kickOffTime) {
+                existingMatch.kickOffTime = newKickOffTime;
+              }
+            }
+            
+            console.log(`Updated live event ${eventId}: ${existingMatch.home} vs ${existingMatch.away} (${existingMatch.league})`);
+          }
         }
       }
 
-      // Save updated data if we added new events
+      // Save updated data if we processed any events
       if (changedEvents.length > 0) {
         await this.saveProcessedData();
       }
