@@ -475,3 +475,38 @@ export interface FootballBetTypes {
     }>;
   };
 }
+
+// Cache Changes API Response Types
+export interface CacheChangedEvent {
+  bT: any[];
+  id: number[]; // [eventId, sportId, regionId, competitionId, ...]
+  n: number[];
+  b: number[];
+  t: string[];
+}
+
+export interface CacheChangedBet {
+  bO: any[];
+  iD: number[]; // [betId, sportId, regionId, competitionId, eventId, ...]
+  n: number[];
+  b: number[];
+  t: string[];
+}
+
+export interface CacheChangedBetOutcome {
+  id: number[]; // [outcomeId, sportId, regionId, competitionId, eventId, betId, ...]
+  n: number[];
+  b: number[];
+  t: string[];
+}
+
+export interface CacheChangesResponse {
+  cacheTime: string;
+  deltaCacheNumbers: number[];
+  maxDeltaCacheNumberAsString: string;
+  changedEvents: CacheChangedEvent[];
+  changedBets: CacheChangedBet[];
+  changedBetOutcomes: CacheChangedBetOutcome[];
+  changedResults: any[];
+  changedEventResults: any[];
+}

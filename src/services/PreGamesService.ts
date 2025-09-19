@@ -6,13 +6,17 @@ import {
   PreGameConfig,
   AdmiralBetEvent,
   AdmiralBetBetTypeSelection,
-  FootballBetTypes
+  FootballBetTypes,
+  CacheChangesResponse,
+  CacheChangedEvent,
+  CacheChangedBet,
+  CacheChangedBetOutcome
 } from '../types';
 import { DataStorageService } from './DataStorageService';
 
 export class PreGamesService {
   private config: PreGameConfig;
-  private collectionTimer?: NodeJS.Timeout;
+  private cacheUpdateTimer?: NodeJS.Timeout;
   private dataStorageService: DataStorageService;
   private readonly ALLOWED_SPORTS = ['B', 'T', 'S']; // Basketball, Tennis, and Football (Soccer) for AdmiralBet
   private basketballBetTypeId: number | null = null;
@@ -29,6 +33,7 @@ export class PreGamesService {
     firstHalfUkupnoGolova: { betTypeId: null, outcomes: [] },
     ukupnoGolova: { betTypeId: null, outcomes: [] }
   };
+  private lastDeltaCacheNumber: string | null = null;
 
   constructor() {
     this.config = {
@@ -84,10 +89,7 @@ export class PreGamesService {
       // Continue anyway - don't let clearing errors stop the collection
     }
 
-    // Start collection immediately and then at specified intervals
-    this.startCollection();
-    
-    // Run the first collection immediately
+    // Run the initial collection only once, then start cache updates
     this.collectPreGamesData();
   }
 
@@ -99,21 +101,30 @@ export class PreGamesService {
 
     this.config.isRunning = false;
 
-    // Clear the collection timer
-    if (this.collectionTimer) {
-      clearInterval(this.collectionTimer);
-      this.collectionTimer = undefined;
+    // Clear the cache update timer
+    if (this.cacheUpdateTimer) {
+      clearInterval(this.cacheUpdateTimer);
+      this.cacheUpdateTimer = undefined;
     }
+
+    // Reset cache number
+    this.lastDeltaCacheNumber = null;
 
     // Save any remaining data before stopping
     await this.saveProcessedData();
   }
 
-  private startCollection(): void {
-    // Set up interval for collection (no immediate collection)
-    this.collectionTimer = setInterval(() => {
-      this.collectPreGamesData();
-    }, this.config.collectionInterval * 1000);
+
+  private startCacheUpdates(): void {
+    // Only start if not already running
+    if (this.cacheUpdateTimer) {
+      return;
+    }
+    
+    // Set up interval for cache updates (every 1 second)
+    this.cacheUpdateTimer = setInterval(() => {
+      this.updateCacheChanges();
+    }, 5000);
   }
 
   private async collectPreGamesData(): Promise<void> {
@@ -128,6 +139,10 @@ export class PreGamesService {
       } else if (this.config.selectedSport === 'S') {
         await this.collectAdmiralBetFootballData();
       }
+
+      // After initial collection is completed, start cache updates
+      console.log('Initial data collection completed. Starting cache updates...');
+      this.startCacheUpdates();
 
     } catch (error) {
       console.error('Error collecting pre-games data:', error);
@@ -154,6 +169,375 @@ export class PreGamesService {
       await this.dataStorageService.savePreGamesData(currentMatches, metadata);
     } catch (error) {
       console.error('Error saving processed pre-games data:', error);
+    }
+  }
+
+  private async updateCacheChanges(): Promise<void> {
+    if (!this.config.isRunning) {
+      return;
+    }
+
+    try {
+      const payload = {
+        lastDeltaCacheNumber: this.lastDeltaCacheNumber,
+        pageId: 35,
+        ignoreBetTypesFilterOnEventIds: [],
+        competitionIds: [],
+        sportIds: [],
+        isLiveFilter: false
+      };
+
+      const response = await axios.post<CacheChangesResponse>(
+        'https://srboffer.admiralbet.rs/api/offer/CacheChangesMinimalByNumberAsStringAndFilterFromLocalCache',
+        payload,
+        {
+          timeout: 10000,
+          headers: {
+            'Host': 'srboffer.admiralbet.rs',
+            'language': 'sr-Latn',
+            'officeid': '138',
+            'origin': 'https://admiralbet.rs',
+            'referer': 'https://admiralbet.rs/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        }
+      );
+
+      if (response.data) {
+        // Update the last delta cache number
+        if (response.data.maxDeltaCacheNumberAsString) {
+          this.lastDeltaCacheNumber = response.data.maxDeltaCacheNumberAsString;
+        }
+
+        // Process changed events (new events that might appear)
+        if (response.data.changedEvents && response.data.changedEvents.length > 0) {
+          await this.processChangedEvents(response.data.changedEvents);
+        }
+
+        // Process changed bet outcomes
+        if (response.data.changedBetOutcomes && response.data.changedBetOutcomes.length > 0) {
+          await this.processChangedBetOutcomes(response.data.changedBetOutcomes);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating cache changes:', error);
+    }
+  }
+
+  private async processChangedEvents(changedEvents: CacheChangedEvent[]): Promise<void> {
+    try {
+      for (const event of changedEvents) {
+        // Validate event structure
+        if (!event || !event.id || event.id.length < 4 || !event.n || event.n.length < 7 || !event.b || event.b.length < 6 || !event.t || event.t.length < 7) {
+          console.warn('Invalid event structure:', event);
+          continue;
+        }
+
+        const eventId = event.id[0]; // Event ID is at index 0
+        const sportId = event.id[1]; // Sport ID is at index 1
+        const regionId = event.id[2]; // Region ID is at index 2
+        const competitionId = event.id[3]; // Competition ID is at index 3
+        
+        // Only process if it's for the selected sport
+        const sportMapping: { [key: number]: string } = { 1: 'S', 2: 'B', 3: 'T' };
+        if (sportMapping[sportId] !== this.config.selectedSport) {
+          continue;
+        }
+
+        // Check if this is a new event we don't have yet
+        if (!this.config.matches.has(eventId)) {
+          console.log(`New event detected: ${eventId}, fetching detailed odds...`);
+          
+          // Fetch detailed odds for this new event
+          const detailedOdds = await this.fetchDetailedOddsForMatch(sportId, regionId, competitionId, eventId);
+          
+          // Create a complete AdmiralBetEvent object
+          const admiralBetEvent: AdmiralBetEvent = {
+            id: eventId,
+            name: event.t[3], // Event name (e.g., "Lanier, Alex - Antonsen, Anders")
+            competitionId: competitionId,
+            regionId: regionId,
+            sportId: sportId,
+            systemStatus: event.n[1] || 0,
+            feedStatus: event.n[2] || 0,
+            isInOffer: event.b[0] === 1,
+            isPlayable: event.b[1] === 1,
+            cashBackEnabled: event.b[2] === 1,
+            externalEventId: event.t[0], // Sport match ID (e.g., "64292")
+            mappingTypeId: event.n[3] || 0,
+            eventTypeId: event.n[4] || 0,
+            isTopOffer: event.b[3] === 1,
+            code: event.t[0], // Sport match ID as code
+            dateTime: event.t[1], // Date time (e.g., "2025-09-19T11:20:00")
+            status: event.n[0],
+            playableBetsCount: event.n[5] || 0,
+            siblingStandardEventId: event.n[6] || null,
+            betsCount: 0,
+            shortName: event.t[4] || event.t[3], // Short name or fallback to full name
+            isLive: false, // Pre-games are not live
+            competitionName: event.t[2], // Competition name (e.g., "Kina Masters")
+            regionName: '', // Not available in cache data
+            sportName: sportId === 1 ? 'Football' : sportId === 2 ? 'Basketball' : 'Tennis',
+            betRadarEventId: 0,
+            playableBetOutcomesCount: 0,
+            sportMatchId: parseInt(event.t[0]) || 0, // Convert to number
+            isEarlyPayoutPossible: false,
+            bets: []
+          };
+
+          // Process the event based on sport
+          if (sportId === 1) {
+            await this.processAdmiralBetFootballEvent(admiralBetEvent, detailedOdds);
+          } else if (sportId === 2) {
+            await this.processAdmiralBetEvent(admiralBetEvent, detailedOdds);
+          } else if (sportId === 3) {
+            await this.processAdmiralBetTennisEvent(admiralBetEvent, detailedOdds);
+          }
+        }
+      }
+
+      // Save updated data if we added new events
+      if (changedEvents.length > 0) {
+        await this.saveProcessedData();
+      }
+    } catch (error) {
+      console.error('Error processing changed events:', error);
+    }
+  }
+
+  private async processChangedBetOutcomes(changedBetOutcomes: CacheChangedBetOutcome[]): Promise<void> {
+    try {
+      for (const outcome of changedBetOutcomes) {
+        // Validate outcome structure
+        if (!outcome || !outcome.id || outcome.id.length < 5 || !outcome.n || outcome.n.length < 3 || !outcome.t) {
+          console.warn('Invalid bet outcome structure:', outcome);
+          continue;
+        }
+
+        const eventId = outcome.id[4]; // Event ID is at index 4
+        const sportId = outcome.id[1]; // Sport ID is at index 1
+        const betTypeId = outcome.n[0]; // Bet type ID is at index 0
+        const betTypeOutcomeId = outcome.n[1]; // Bet type outcome ID is at index 1
+        const newValue = outcome.n[2]; // New value is at index 2
+        const betTypeName = outcome.t[0] || ''; // Bet type name is at index 0
+        const outcomeName = outcome.t[1] || ''; // Outcome name is at index 1
+        const specialValue = outcome.t[2] || null; // Special value is at index 2
+
+        // Only process if it's for the selected sport
+        const sportMapping: { [key: number]: string } = { 1: 'S', 2: 'B', 3: 'T' };
+        if (sportMapping[sportId] !== this.config.selectedSport) {
+          continue;
+        }
+
+        // Find the match and update the odds
+        const match = this.config.matches.get(eventId);
+        if (match) {
+          this.updateMatchOdds(match, betTypeName, outcomeName, specialValue, newValue, betTypeOutcomeId);
+          console.log(`Updated odds for match ${eventId}: ${betTypeName} ${outcomeName} = ${newValue}`);
+        }
+      }
+
+      // Save updated data
+      await this.saveProcessedData();
+    } catch (error) {
+      console.error('Error processing changed bet outcomes:', error);
+    }
+  }
+
+  private updateMatchOdds(match: ProcessedPreGameMatch, betTypeName: string, outcomeName: string, specialValue: string | null, newValue: number, betTypeOutcomeId: number): void {
+    if (!match.bets.odds) {
+      match.bets.odds = {};
+    }
+
+    const odds = match.bets.odds;
+
+    // Handle different bet types based on sport
+    if (match.sport === 'B') {
+      // Basketball
+      if (betTypeName === 'Pobednik') {
+        if (outcomeName === '1') {
+          odds.basketballFTOT1 = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName === '2') {
+          odds.basketballFTOT2 = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        }
+      }
+    } else if (match.sport === 'T') {
+      // Tennis
+      if (betTypeName === 'Pobednik') {
+        if (outcomeName === '1') {
+          odds.tennisHomeWins = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName === '2') {
+          odds.tennisAwayWins = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        }
+      } else if (betTypeName === '1.set - Pobednik') {
+        if (outcomeName === '1') {
+          odds.tennisHomeWinsFirstSet = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName === '2') {
+          odds.tennisAwayWinsFirstSet = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        }
+      }
+    } else if (match.sport === 'S') {
+      // Football
+      if (betTypeName === 'Konacan ishod') {
+        if (outcomeName === '1') {
+          odds.fullTimeResultHomeWin = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName === 'X') {
+          odds.fullTimeResultDraw = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName === '2') {
+          odds.fullTimeResultAwayWin = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        }
+      } else if (betTypeName === '1.pol - 1X2') {
+        if (outcomeName === '1') {
+          odds.firstHalfResultHomeWin = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName === 'X') {
+          odds.firstHalfResultDraw = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName === '2') {
+          odds.firstHalfResultAwayWin = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        }
+      } else if (betTypeName === 'Broj golova') {
+        if (outcomeName?.toLowerCase().includes('1-2')) {
+          odds.oneToTwoGoals = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName?.toLowerCase().includes('1-3')) {
+          odds.oneToThreeGoals = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName?.toLowerCase().includes('1-4')) {
+          odds.oneToFourGoals = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName?.toLowerCase().includes('2-3')) {
+          odds.twoOrThreeGoals = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName?.toLowerCase().includes('2-4')) {
+          odds.twoToFourGoals = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName?.toLowerCase().includes('3-4')) {
+          odds.threeToFourGoals = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName?.toLowerCase().includes('3-5')) {
+          odds.threeToFiveGoals = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName?.toLowerCase().includes('4-5')) {
+          odds.fourToFiveGoals = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName?.toLowerCase().includes('4-6')) {
+          odds.fourToSixGoals = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName?.toLowerCase().includes('0-2')) {
+          odds.zeroToTwoGoals = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        }
+      } else if (betTypeName === 'Oba tima daju gol') {
+        if (outcomeName === 'GG' || outcomeName?.toLowerCase().includes('da')) {
+          odds.bothTeamsToScore = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        } else if (outcomeName === 'NG' || outcomeName?.toLowerCase().includes('ne')) {
+          odds.oneTeamNotToScore = {
+            oddValue: newValue,
+            betPickCode: betTypeOutcomeId
+          };
+        }
+      } else if (betTypeName === '1.pol - Ukupno golova') {
+        if (specialValue) {
+          if (outcomeName?.toLowerCase().includes('manje')) {
+            if (!odds.firstHalfUnderTotal) {
+              odds.firstHalfUnderTotal = {};
+            }
+            odds.firstHalfUnderTotal[specialValue] = {
+              oddValue: newValue,
+              betPickCode: betTypeOutcomeId
+            };
+          } else if (outcomeName?.toLowerCase().includes('vise')) {
+            if (!odds.firstHalfOverTotal) {
+              odds.firstHalfOverTotal = {};
+            }
+            odds.firstHalfOverTotal[specialValue] = {
+              oddValue: newValue,
+              betPickCode: betTypeOutcomeId
+            };
+          }
+        }
+      } else if (betTypeName === 'Ukupno golova') {
+        if (specialValue) {
+          if (outcomeName?.toLowerCase().includes('manje')) {
+            if (!odds.fullTimeUnderTotal) {
+              odds.fullTimeUnderTotal = {};
+            }
+            odds.fullTimeUnderTotal[specialValue] = {
+              oddValue: newValue,
+              betPickCode: betTypeOutcomeId
+            };
+          } else if (outcomeName?.toLowerCase().includes('vise')) {
+            if (!odds.fullTimeOverTotal) {
+              odds.fullTimeOverTotal = {};
+            }
+            odds.fullTimeOverTotal[specialValue] = {
+              oddValue: newValue,
+              betPickCode: betTypeOutcomeId
+            };
+          }
+        }
+      }
     }
   }
 
