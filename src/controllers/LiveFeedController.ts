@@ -10,42 +10,47 @@ export class LiveFeedController {
 
   public startLiveFeed = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { collectionInterval = 1, sport = 'S' } = req.body;
+      const { collectionInterval = 30, sport = 'S' } = req.body;
 
       // Validate interval
-      if (collectionInterval < 1 || collectionInterval > 300) {
+      if (![1, 15, 30, 60, 120].includes(collectionInterval)) {
         res.status(400).json({
           success: false,
-          error: 'Collection interval must be between 1 and 300 seconds'
+          error: 'Collection interval must be 1, 15, 30, 60, or 120 seconds'
         });
         return;
       }
 
-      // Validate sport
-      if (!['S', 'B', 'T'].includes(sport)) {
+      // Validate sport - basketball, tennis, and football allowed for AdmiralBet
+      if (!['B', 'T', 'S'].includes(sport)) {
         res.status(400).json({
           success: false,
-          error: 'Invalid sport. Allowed values: S (Football), B (Basketball), T (Tennis)'
+          error: 'Invalid sport. Only basketball (B), tennis (T), and football (S) are supported for AdmiralBet'
         });
         return;
+      }
+
+      // Stop any running collection first
+      if (this.liveFeedService.getStatus().isRunning) {
+        await this.liveFeedService.stopLiveFeed();
       }
 
       await this.liveFeedService.startLiveFeed(collectionInterval, sport);
 
-      const sportName = sport === 'S' ? 'Football' : sport === 'B' ? 'Basketball' : 'Tennis';
+      const sportName = sport === 'B' ? 'basketball' : sport === 'T' ? 'tennis' : 'football';
       res.json({
         success: true,
-        message: `${sportName} live feed started successfully`,
+        message: `AdmiralBet ${sportName} live feed collection started successfully`,
         data: {
           collectionInterval,
           sportFilter: sport
         }
       });
     } catch (error) {
-      console.error('Error starting live feed:', error);
+      console.error('Error starting live feed collection:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to start live feed'
+        error: 'Failed to start live feed collection'
       });
     }
   };
@@ -56,13 +61,13 @@ export class LiveFeedController {
 
       res.json({
         success: true,
-        message: 'Live feed stopped successfully'
+        message: 'Live feed collection stopped successfully'
       });
     } catch (error) {
-      console.error('Error stopping live feed:', error);
+      console.error('Error stopping live feed collection:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to stop live feed'
+        error: 'Failed to stop live feed collection'
       });
     }
   };
@@ -93,10 +98,10 @@ export class LiveFeedController {
         data: matches
       });
     } catch (error) {
-      console.error('Error getting matches:', error);
+      console.error('Error getting live feed matches:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to get matches'
+        error: 'Failed to get live feed matches'
       });
     }
   };
@@ -129,10 +134,10 @@ export class LiveFeedController {
         data: match
       });
     } catch (error) {
-      console.error('Error getting match by ID:', error);
+      console.error('Error getting live feed match by ID:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to get match'
+        error: 'Failed to get live feed match'
       });
     }
   };

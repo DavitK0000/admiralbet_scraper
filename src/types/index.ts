@@ -223,11 +223,11 @@ export interface ReadableOdds {
 export interface LiveFeedConfig {
   isRunning: boolean;
   collectionInterval: number; // in seconds (30 or 60)
+  selectedSport: string; // S, B, T
   lastProcessedTime?: number;
-  matches: Map<number, ProcessedMatch>;
-  rawFeeds: LiveFeedResponse[];
-  liveFeedUrl?: string; // URL extracted from initial streaming
-  isInitialStreaming: boolean; // Whether we're in initial streaming phase
+  matches: Map<number, ProcessedLiveFeedMatch>;
+  leagues: Map<string, any>;
+  lastDeltaCacheNumber: string | null;
 }
 
 export interface InitialStreamingResponse {
@@ -509,4 +509,156 @@ export interface CacheChangesResponse {
   changedBetOutcomes: CacheChangedBetOutcome[];
   changedResults: any[];
   changedEventResults: any[];
+}
+
+// Live Feed Types for AdmiralBet
+export interface LiveFeedSport {
+  id: number;
+  name: string;
+  eventsCount: number;
+  selections: any[];
+  regions: LiveFeedRegion[];
+}
+
+export interface LiveFeedRegion {
+  id: number;
+  regionName: string;
+  sportId: number;
+  eventsCount: number;
+  competitions: LiveFeedCompetition[];
+}
+
+export interface LiveFeedCompetition {
+  competitionId: number;
+  regionId: number;
+  competitionName: string;
+  regionName: string | null;
+  eventsCount: number;
+  favouriteOrderNumber: number | null;
+  events: LiveFeedEvent[];
+}
+
+export interface LiveFeedEvent {
+  id: number;
+  name: string;
+  competitionId: number;
+  regionId: number;
+  sportId: number;
+  systemStatus: number;
+  feedStatus: number;
+  isInOffer: boolean;
+  isPlayable: boolean;
+  cashBackEnabled: boolean;
+  externalEventId: string;
+  mappingTypeId: number;
+  eventTypeId: number;
+  isTopOffer: boolean;
+  code: string;
+  dateTime: string;
+  status: number;
+  playableBetsCount: number;
+  siblingStandardEventId: number | null;
+  betsCount: number;
+  bets: LiveFeedBet[];
+  shortName: string;
+  isLive: boolean;
+  competitionName: string;
+  regionName: string;
+  sportName: string;
+  betRadarEventId: number;
+  playableBetOutcomesCount: number;
+  sportMatchId: number;
+  isEarlyPayoutPossible: boolean;
+}
+
+export interface LiveFeedBet {
+  id: number;
+  eventId: number;
+  competitionId: number;
+  regionId: number;
+  sportId: number;
+  betTypeId: number;
+  sBV: string | null;
+  isPlayable: boolean;
+  isInOffer: boolean;
+  isMostBalanced: boolean;
+  betTypeValueType: number;
+  cashBackEnabled: boolean;
+  betOutcomes: LiveFeedBetOutcome[];
+  outrightName: string | null;
+  profitMargin: number | null;
+  externalId: number;
+  externalSpecifiers: string | null;
+}
+
+export interface LiveFeedBetOutcome {
+  id: number;
+  betId: number;
+  eventId: number;
+  competitionId: number;
+  regionId: number;
+  sportId: number;
+  isPlayable: boolean;
+  isInOffer: boolean;
+  betTypeId: number;
+  betTypeOutcomeId: number;
+  orderNo: number;
+  odd: number;
+  sBV: string | null;
+  name: string;
+  cashBackEnabled: boolean;
+  useParticipiantName: number;
+  resultStatus: number;
+  isEarlyPayoutPossible: boolean;
+  externalId: string;
+}
+
+export interface LiveFeedResults {
+  [eventId: string]: {
+    sportId: number;
+    regionId: number;
+    competitionId: number;
+    active: number;
+    betStatus: string;
+    messageNumber: number | null;
+    status: string;
+    matchTime: string;
+    extMatchTime: string;
+    score: string;
+    setScore: string;
+    gameScore: string | null;
+    tiebreak: string | null;
+    server: string | null;
+    messageDateTime: string | null;
+    isTopMinute: boolean;
+    dateReceivedByCacheServer: string;
+    redCards: string;
+    stoppageTimeAnnounced: string | null;
+    stoppageTime: string | null;
+    id: number;
+    parentId: number | null;
+    state: number;
+    dateCreated: string;
+    dateUpdated: string;
+    dateExpired: string;
+  };
+}
+
+export interface ProcessedLiveFeedMatch {
+  id: number;
+  matchCode: number;
+  home: string;
+  away: string;
+  league: string;
+  sport: string;
+  sportName: string;
+  kickOffTime: number;
+  status: number;
+  blocked: boolean;
+  favourite: boolean;
+  isLive: boolean;
+  liveScore?: string;
+  liveTime?: string;
+  liveStatus?: string;
+  bets: ProcessedBet;
 }

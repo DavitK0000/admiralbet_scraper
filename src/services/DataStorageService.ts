@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { ProcessedMatch, ProcessedPreGameMatch } from '../types';
+import { ProcessedMatch, ProcessedPreGameMatch, ProcessedLiveFeedMatch } from '../types';
 import { RedisService } from './RedisService';
 
 export class DataStorageService {
@@ -61,6 +61,19 @@ export class DataStorageService {
       }
     } catch (error) {
       console.error('Error saving pre-games data:', error);
+      throw error;
+    }
+  }
+
+  public async saveLiveFeedData(matches: ProcessedLiveFeedMatch[], metadata: any): Promise<void> {
+    try {
+      if (this.redisAvailable && this.redisService.isRedisConnected()) {
+        await this.saveLiveFeedToRedis(matches, metadata);
+      } else {
+        await this.saveLiveFeedToFile(matches, metadata);
+      }
+    } catch (error) {
+      console.error('Error saving live feed data:', error);
       throw error;
     }
   }
@@ -269,6 +282,65 @@ export class DataStorageService {
       await this.redisService.saveMetadata(metadata);
     } catch (error) {
       console.error('Error saving pre-games data to Redis:', error);
+      throw error;
+    }
+  }
+
+  private async saveLiveFeedToFile(matches: ProcessedLiveFeedMatch[], metadata: any): Promise<void> {
+    try {
+      const liveFeedFilePath = path.join(process.cwd(), 'data', 'live-feed-data.json');
+      let existingData: any = {};
+      
+      // Read existing data if file exists
+      if (fs.existsSync(liveFeedFilePath)) {
+        try {
+          const fileContent = fs.readFileSync(liveFeedFilePath, 'utf8');
+          existingData = JSON.parse(fileContent);
+        } catch (parseError) {
+          console.warn('Error parsing existing live feed data file, starting fresh:', parseError);
+          existingData = {};
+        }
+      }
+
+      // Update existing data with current matches
+      for (const match of matches) {
+        if (!existingData.matches) {
+          existingData.matches = [];
+        }
+        
+        // Find existing match by ID
+        const existingMatchIndex = existingData.matches.findIndex((m: any) => m.id === match.id);
+        
+        if (existingMatchIndex >= 0) {
+          // Update existing match with all its data including bets
+          existingData.matches[existingMatchIndex] = match;
+        } else {
+          // Add new match with all its data including bets
+          existingData.matches.push(match);
+        }
+      }
+
+      // Update metadata
+      existingData.lastUpdated = metadata.lastUpdated;
+      existingData.collectionInterval = metadata.collectionInterval;
+      existingData.selectedSport = metadata.selectedSport;
+      existingData.totalMatches = existingData.matches.length;
+      existingData.totalLeagues = metadata.totalLeagues;
+
+      // Write updated data back to file
+      fs.writeFileSync(liveFeedFilePath, JSON.stringify(existingData, null, 2));
+    } catch (error) {
+      console.error('Error saving live feed data to file:', error);
+      throw error;
+    }
+  }
+
+  private async saveLiveFeedToRedis(matches: ProcessedLiveFeedMatch[], metadata: any): Promise<void> {
+    try {
+      await this.redisService.saveMatches(matches as any); // Type assertion for compatibility
+      await this.redisService.saveMetadata(metadata);
+    } catch (error) {
+      console.error('Error saving live feed data to Redis:', error);
       throw error;
     }
   }

@@ -632,7 +632,7 @@
                         <div class="odd-details">
                             <div><strong>Match ID:</strong> ${match.id}</div>
                             <div><strong>League:</strong> ${match.league}</div>
-                            <div><strong>Sport:</strong> ${match.sportName} (${match.sport})</div>
+                            <div><strong>Sport:</strong> ${match.sportName}</div>
                             <div><strong>Status:</strong> ${match.liveStatus} ${match.isLive ? '🔴 LIVE' : ''}</div>
                             <div><strong>Kick Off:</strong> ${new Date(match.kickOffTime).toLocaleString()}</div>
                             <div><strong>Has Bets:</strong> ${match.bets && Object.keys(match.bets.odds || {}).length > 0 ? 'Yes' : 'No'}</div>
@@ -909,7 +909,7 @@
                         <div class="odd-details">
                             <div><strong>Match ID:</strong> ${match.id}</div>
                             <div><strong>League:</strong> ${match.league}</div>
-                            <div><strong>Sport:</strong> ${match.sport}</div>
+                            <div><strong>Sport:</strong> ${match.sport === 'B' ? 'Basketball' : match.sport === 'T' ? 'Tennis' : match.sport === 'S' ? 'Football' : match.sport}</div>
                             <div><strong>Status:</strong> ${match.status}</div>
                             <div><strong>Kick Off:</strong> ${new Date(match.kickOffTime).toLocaleString()}</div>
                             <div><strong>Has Bets:</strong> ${match.bets && Object.keys(match.bets.odds || {}).length > 0 ? 'Yes' : 'No'}</div>
